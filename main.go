@@ -38,7 +38,7 @@ func main() {
 
 	// Print table
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "JOB ID\tSTATUS\tSTARTED\tDURATION\tURL")
+	fmt.Fprintln(w, "JOB ID\tSTATUS\tSTARTED\tDURATION\tBRANCH\tURL")
 
 	for _, job := range jobs {
 		url := job.SpyglassLink
@@ -52,7 +52,16 @@ func main() {
 			started = t.Format("2006-01-02 15:04")
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", job.ID, job.Result, started, crawler.FormatDuration(job.Duration), url)
+		branch := ""
+		if job.Refs != nil {
+			if len(job.Refs.Pulls) > 0 {
+				branch = fmt.Sprintf("PR %d", job.Refs.Pulls[0].Number)
+			} else {
+				branch = job.Refs.BaseRef
+			}
+		}
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", job.ID, job.Result, started, crawler.FormatDuration(job.Duration), branch, url)
 	}
 	w.Flush()
 }

@@ -17,6 +17,23 @@ type ProwJob struct {
 	Started      string `json:"Started"`
 	Duration     int64  `json:"Duration"` // Nanoseconds
 	Result       string `json:"Result"`
+	Refs         *Refs  `json:"Refs,omitempty"`
+}
+
+// Refs holds source control reference details
+type Refs struct {
+	Org     string `json:"org"`
+	Repo    string `json:"repo"`
+	BaseRef string `json:"base_ref"` // Target branch
+	BaseSHA string `json:"base_sha"`
+	Pulls   []Pull `json:"pulls,omitempty"`
+}
+
+// Pull represents a Pull Request
+type Pull struct {
+	Number int    `json:"number"`
+	Author string `json:"author"`
+	SHA    string `json:"sha"`
 }
 
 // Config holds the configuration for the crawler
