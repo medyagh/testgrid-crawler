@@ -1,4 +1,4 @@
-package main
+package crawler
 
 import (
 	"encoding/json"
@@ -19,40 +19,48 @@ type ProwJob struct {
 	Result       string `json:"Result"`
 }
 
-// FetchJobHistory scrapes the Prow job history page for a given job name
-// It follows pagination to fetch more jobs.
-func FetchJobHistory(jobName string) ([]ProwJob, error) {
-	baseURL := fmt.Sprintf("https://prow.k8s.io/job-history/gs/kubernetes-ci-logs/logs/%s", jobName)
+// Config holds the configuration for the crawler
+type Config struct {
+	JobName  string
+	MaxPages int
+}
+
+// Crawler is responsible for scraping Prow job history
+type Crawler struct {
+	config Config
+}
+
+// New creates a new Crawler with the given configuration
+func New(config Config) *Crawler {
+	if config.MaxPages <= 0 {
+		config.MaxPages = 20 // Default limit
+	}
+	return &Crawler{config: config}
+}
+
+// Run scrapes the Prow job history based on the crawler's configuration
+func (c *Crawler) Run() ([]ProwJob, error) {
+	baseURL := fmt.Sprintf("https://prow.k8s.io/job-history/gs/kubernetes-ci-logs/logs/%s", c.config.JobName)
 	nextURL := baseURL
 	var allJobs []ProwJob
-	
-	// Safety limit to prevent infinite loops (e.g., 20 pages or ~400 jobs)
-	maxPages := 20 
 
-	for i := 0; i < maxPages; i++ {
+	for i := 0; i < c.config.MaxPages; i++ {
 		jobs, nextLink, err := fetchPage(nextURL)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		allJobs = append(allJobs, jobs...)
 
 		if nextLink == "" {
 			break
 		}
-		
-		// Construct next URL
-		// nextLink is relative, usually likeStub: "?buildId=..." or "/job-history/..."
-		// The HTML shows: /job-history/gs/kubernetes-ci-logs/logs/ci-minikube-integration?buildId=...
-		// But let's handle just the query part if possible, or full path.
-		
-		// If it's a full path (starting with /), prepend domain
+
 		if strings.HasPrefix(nextLink, "/") {
 			nextURL = "https://prow.k8s.io" + nextLink
 		} else if strings.HasPrefix(nextLink, "?") {
 			nextURL = baseURL + nextLink
 		} else {
-			// Fallback or errors
 			break
 		}
 	}
@@ -76,7 +84,6 @@ func fetchPage(pageURL string) ([]ProwJob, string, error) {
 		return nil, "", fmt.Errorf("failed to read body: %w", err)
 	}
 
-	// 1. Extract JSON
 	re := regexp.MustCompile(`var allBuilds = (\[.*?\]);`)
 	matches := re.FindSubmatch(body)
 	if len(matches) < 2 {
@@ -88,21 +95,13 @@ func fetchPage(pageURL string) ([]ProwJob, string, error) {
 		return nil, "", fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	// 2. Extract Next Link (Older Runs)
-	// <a href="/job-history/gs/kubernetes-ci-logs/logs/ci-minikube-integration?buildId=2008545318748033024"><- Older Runs</a>
-	// We look for "Older Runs" text and the href associated with it.
-	// A simple regex might be sufficient.
-	// match href="(...)"...Older Runs
 	nextLinkRe := regexp.MustCompile(`<a href="([^"]+)"[^>]*>&lt;- Older Runs</a>`)
 	linkMatches := nextLinkRe.FindSubmatch(body)
 	var nextLink string
 	if len(linkMatches) >= 2 {
 		nextLink = string(linkMatches[1])
-		// Decode HTML entities if needed, but usually simple URL is fine.
-		// However, the anchor text might be different or have classes.
-		// The example was: <td><a href="...">...</a></td>
 	}
-	
+
 	return jobs, nextLink, nil
 }
 

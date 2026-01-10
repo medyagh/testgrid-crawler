@@ -6,13 +6,15 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"test-grid-crawler/pkg/crawler"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: prow-crawler <job-name>")
-		fmt.Println("Example: prow-crawler minikube-periodics#ci-minikube-integration")
-		fmt.Println("         prow-crawler ci-minikube-integration")
+		fmt.Println("Usage: test-grid-crawler <job-name>")
+		fmt.Println("Example: test-grid-crawler minikube-periodics#ci-minikube-integration")
+		fmt.Println("         test-grid-crawler ci-minikube-integration")
 		os.Exit(1)
 	}
 
@@ -21,7 +23,12 @@ func main() {
 
 	fmt.Printf("Fetching history for job: %s\n", jobName)
 
-	jobs, err := FetchJobHistory(jobName)
+	c := crawler.New(crawler.Config{
+		JobName:  jobName,
+		MaxPages: 20, // Configurable limit
+	})
+
+	jobs, err := c.Run()
 	if err != nil {
 		fmt.Printf("Error scraping job history: %v\n", err)
 		os.Exit(1)
@@ -33,33 +40,19 @@ func main() {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "JOB ID\tSTATUS\tSTARTED\tDURATION\tURL")
 
-	// Jobs seem to be sorted by most recent first in the JSON usually, but we can rely on order returned
-	// or sort if needed. The snippet showed them descending.
-	// We will list all of them or maybe top 20 to avoid spamming?
-	// The user asked for "all url for the most recent jobs", "sorted by most recent".
-	// Let's print top 50 by default to be safe, or all.
-	// The User said "list all url for the most recent jobs".
-	// I will print all, but maybe pagination is better?
-	// For CLI, piping is easy. I'll print all.
-
 	for _, job := range jobs {
-		// Prow URL: https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-minikube-integration/2009755303301615616
-		// The SpyglassLink in JSON is relative: /view/gs/kubernetes-ci-logs/logs/ci-minikube-integration/2009755303301615616
-		// We should prepend https://prow.k8s.io if it starts with /
 		url := job.SpyglassLink
 		if strings.HasPrefix(url, "/") {
 			url = "https://prow.k8s.io" + url
 		}
 
 		started := job.Started
-		// Try to parse time to be nicer?
-		// "2026-01-09T22:33:06Z"
 		t, err := time.Parse(time.RFC3339, job.Started)
 		if err == nil {
 			started = t.Format("2006-01-02 15:04")
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", job.ID, job.Result, started, FormatDuration(job.Duration), url)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", job.ID, job.Result, started, crawler.FormatDuration(job.Duration), url)
 	}
 	w.Flush()
 }
