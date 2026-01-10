@@ -40,7 +40,8 @@ type Pull struct {
 type Config struct {
 	JobName      string
 	MaxPages     int
-	SkipStatuses []string // List of statuses to skip (case-insensitive)
+	SkipStatuses []string  // List of statuses to skip (case-insensitive)
+	MinDuration  time.Duration // Minimum duration to include
 }
 
 // Crawler is responsible for scraping Prow job history
@@ -115,6 +116,10 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 		for _, job := range jobs {
 			// Skip if in skip list
 			if skipMap[job.Result] {
+				continue
+			}
+			// Skip if duration is too short
+			if c.config.MinDuration > 0 && time.Duration(job.Duration) < c.config.MinDuration {
 				continue
 			}
 			allJobs = append(allJobs, job)

@@ -19,12 +19,14 @@ const (
 
 func main() {
 	skipStatus := pflag.String("skip-status", "", "Comma-separated list of statuses to skip (e.g., SUCCESS,Aborted)")
+	minDuration := pflag.Duration("min-duration", 0, "Minimum job duration (e.g., 5m, 1h)")
 	pflag.Parse()
 
 	args := pflag.Args()
 	if len(args) < 1 {
 		fmt.Println("Usage: test-grid-crawler [flags] <job-name>")
 		fmt.Println("Example: test-grid-crawler -skip-status SUCCESS,Aborted minikube-periodics#ci-minikube-integration")
+		fmt.Println("         test-grid-crawler --min-duration 10m ci-minikube-integration")
 		fmt.Println("         test-grid-crawler ci-minikube-integration")
 		pflag.PrintDefaults()
 		os.Exit(1)
@@ -44,6 +46,7 @@ func main() {
 		JobName:      jobName,
 		MaxPages:     2, // Configurable limit
 		SkipStatuses: skipList,
+		MinDuration:  *minDuration,
 	})
 
 	jobs, err := c.Run()
