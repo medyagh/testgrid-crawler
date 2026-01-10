@@ -25,7 +25,7 @@ func main() {
 
 	c := crawler.New(crawler.Config{
 		JobName:  jobName,
-		MaxPages: 20, // Configurable limit
+		MaxPages: 2, // Configurable limit
 	})
 
 	jobs, err := c.Run()
