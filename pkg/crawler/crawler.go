@@ -1,3 +1,4 @@
+// Package crawler implements the Prow job scraping logic.
 package crawler
 
 import (
@@ -47,7 +48,7 @@ type Pull struct {
 type Config struct {
 	JobName      string
 	MaxPages     int
-	SkipStatuses []string  // List of statuses to skip (case-insensitive)
+	SkipStatuses []string      // List of statuses to skip (case-insensitive)
 	MinDuration  time.Duration // Minimum duration to include
 }
 
@@ -86,12 +87,6 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 			found = true
 			break
 		}
-		// Optional: fmt.Printf("DEBUG: Probing %s failed: %v (Status: %d)\n", url, 0)
-		// We could add verbose mode, but for now let's just assume silent failure is fine for fallback.
-		// However, since we are debugging a specific issue, I will print it if it's not 404.
-		if err == nil && resp.StatusCode != http.StatusNotFound {
-			// fmt.Printf("DEBUG: Probe %s returned status %d\n", url, resp.StatusCode)
-		}
 	}
 
 	if !found {
@@ -120,12 +115,13 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 			break
 		}
 
-		if strings.HasPrefix(nextLink, "/") {
+		switch {
+		case strings.HasPrefix(nextLink, "/"):
 			nextURL = "https://prow.k8s.io" + nextLink
-		} else if strings.HasPrefix(nextLink, "?") {
+		case strings.HasPrefix(nextLink, "?"):
 			nextURL = baseURL + nextLink
-		} else {
-			break
+		default:
+			return allJobs, nil
 		}
 	}
 
@@ -161,7 +157,7 @@ func fetchPage(pageURL string) ([]ProwJob, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch URL %s: %w", pageURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("received status code %d from %s", resp.StatusCode, pageURL)

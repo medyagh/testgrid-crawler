@@ -1,3 +1,4 @@
+// Package main is the entry point for the Prow crawler CLI.
 package main
 
 import (
@@ -85,7 +86,6 @@ func main() {
 				prRef = job.Refs.BaseRef
 			}
 		}
-
 
 		// Determine color
 		colorCode := ""
