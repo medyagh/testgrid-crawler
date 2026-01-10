@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -17,21 +18,32 @@ const (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: test-grid-crawler <job-name>")
-		fmt.Println("Example: test-grid-crawler minikube-periodics#ci-minikube-integration")
+	skipStatus := pflag.String("skip-status", "", "Comma-separated list of statuses to skip (e.g., SUCCESS,Aborted)")
+	pflag.Parse()
+
+	args := pflag.Args()
+	if len(args) < 1 {
+		fmt.Println("Usage: test-grid-crawler [flags] <job-name>")
+		fmt.Println("Example: test-grid-crawler -skip-status SUCCESS,Aborted minikube-periodics#ci-minikube-integration")
 		fmt.Println("         test-grid-crawler ci-minikube-integration")
+		pflag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	input := os.Args[1]
+	input := args[0]
 	jobName := parseJobName(input)
 
 	fmt.Printf("Fetching history for job: %s\n", jobName)
 
+	skipList := []string{}
+	if *skipStatus != "" {
+		skipList = strings.Split(*skipStatus, ",")
+	}
+
 	c := crawler.New(crawler.Config{
-		JobName:  jobName,
-		MaxPages: 2, // Configurable limit
+		JobName:      jobName,
+		MaxPages:     2, // Configurable limit
+		SkipStatuses: skipList,
 	})
 
 	jobs, err := c.Run()

@@ -38,8 +38,9 @@ type Pull struct {
 
 // Config holds the configuration for the crawler
 type Config struct {
-	JobName  string
-	MaxPages int
+	JobName      string
+	MaxPages     int
+	SkipStatuses []string // List of statuses to skip (case-insensitive)
 }
 
 // Crawler is responsible for scraping Prow job history
@@ -77,7 +78,7 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 			found = true
 			break
 		}
-		// Optional: fmt.Printf("DEBUG: Probing %s failed: %v (Status: %d)\n", url, err, 0)
+		// Optional: fmt.Printf("DEBUG: Probing %s failed: %v (Status: %d)\n", url, 0)
 		// We could add verbose mode, but for now let's just assume silent failure is fine for fallback.
 		// However, since we are debugging a specific issue, I will print it if it's not 404.
 		if err == nil && resp.StatusCode != http.StatusNotFound {
@@ -93,6 +94,13 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 	nextURL := baseURL
 	var allJobs []ProwJob
 
+	skipMap := make(map[string]bool)
+	for _, s := range c.config.SkipStatuses {
+		if s != "" {
+			skipMap[strings.ToUpper(s)] = true
+		}
+	}
+
 	for i := 0; i < c.config.MaxPages; i++ {
 		jobs, nextLink, err := fetchPage(nextURL)
 		if err != nil {
@@ -103,7 +111,14 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 			return allJobs, nil // Return what we have if a page fails
 		}
 
-		allJobs = append(allJobs, jobs...)
+		// Filter jobs if needed
+		for _, job := range jobs {
+			// Skip if in skip list
+			if skipMap[job.Result] {
+				continue
+			}
+			allJobs = append(allJobs, job)
+		}
 
 		if nextLink == "" {
 			break
