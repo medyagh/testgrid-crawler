@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
+	"test-grid-crawler/pkg/crawler"
 	"time"
 
-	"test-grid-crawler/pkg/crawler"
+	"github.com/olekukonko/tablewriter"
+)
+
+const (
+	ColorReset  = "\033[0m"
+	ColorRed    = "\033[31m"
+	ColorYellow = "\033[33m"
 )
 
 func main() {
@@ -37,8 +43,12 @@ func main() {
 	fmt.Printf("Found %d jobs.\n\n", len(jobs))
 
 	// Print table
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "JOB ID\tSTATUS\tSTARTED\tDURATION\tPR\tURL")
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"JOB ID", "STATUS", "STARTED", "DURATION", "PR", "URL"})
+	table.SetBorder(false) // User seems to prefer simple list, but tablewriter default valid too. Let's try No Border to match previous style but aligned.
+	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	// table.SetAutoWrapText(false) // Ensure URLs don't wrap weirdly if not needed
 
 	for _, job := range jobs {
 		url := job.SpyglassLink
@@ -61,9 +71,31 @@ func main() {
 			}
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", job.ID, job.Result, started, crawler.FormatDuration(job.Duration), prRef, url)
+		// Determine color
+		colorCode := ""
+		if job.Result == "FAILURE" {
+			colorCode = ColorRed
+		} else if job.Result != "SUCCESS" {
+			colorCode = ColorYellow
+		}
+
+		c := func(s string) string {
+			if colorCode == "" {
+				return s
+			}
+			return colorCode + s + ColorReset
+		}
+
+		table.Append([]string{
+			c(job.ID),
+			c(job.Result),
+			c(started),
+			c(crawler.FormatDuration(job.Duration)),
+			c(prRef),
+			c(url),
+		})
 	}
-	w.Flush()
+	table.Render()
 }
 
 func parseJobName(input string) string {
