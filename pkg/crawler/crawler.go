@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// Job Status Constants
+const (
+	StatusSuccess = "SUCCESS"
+	StatusFailure = "FAILURE"
+	StatusAborted = "ABORTED"
+)
+
 // ProwJob represents a single job run from the Prow history
 type ProwJob struct {
 	SpyglassLink string `json:"SpyglassLink"`
@@ -95,13 +102,6 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 	nextURL := baseURL
 	var allJobs []ProwJob
 
-	skipMap := make(map[string]bool)
-	for _, s := range c.config.SkipStatuses {
-		if s != "" {
-			skipMap[strings.ToUpper(s)] = true
-		}
-	}
-
 	for i := 0; i < c.config.MaxPages; i++ {
 		jobs, nextLink, err := fetchPage(nextURL)
 		if err != nil {
@@ -112,18 +112,9 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 			return allJobs, nil // Return what we have if a page fails
 		}
 
-		// Filter jobs if needed
-		for _, job := range jobs {
-			// Skip if in skip list
-			if skipMap[job.Result] {
-				continue
-			}
-			// Skip if duration is too short
-			if c.config.MinDuration > 0 && time.Duration(job.Duration) < c.config.MinDuration {
-				continue
-			}
-			allJobs = append(allJobs, job)
-		}
+		// Filter jobs
+		filtered := FilterJobs(jobs, c.config)
+		allJobs = append(allJobs, filtered...)
 
 		if nextLink == "" {
 			break
@@ -139,6 +130,30 @@ func (c *Crawler) Run() ([]ProwJob, error) {
 	}
 
 	return allJobs, nil
+}
+
+// FilterJobs filters a list of ProwJobs based on the configuration
+func FilterJobs(jobs []ProwJob, config Config) []ProwJob {
+	var filtered []ProwJob
+	skipMap := make(map[string]bool)
+	for _, s := range config.SkipStatuses {
+		if s != "" {
+			skipMap[strings.ToUpper(s)] = true
+		}
+	}
+
+	for _, job := range jobs {
+		// Skip if in skip list
+		if skipMap[job.Result] {
+			continue
+		}
+		// Skip if duration is too short
+		if config.MinDuration > 0 && time.Duration(job.Duration) < config.MinDuration {
+			continue
+		}
+		filtered = append(filtered, job)
+	}
+	return filtered
 }
 
 func fetchPage(pageURL string) ([]ProwJob, string, error) {

@@ -86,11 +86,12 @@ func main() {
 			}
 		}
 
+
 		// Determine color
 		colorCode := ""
-		if job.Result == "FAILURE" {
+		if job.Result == crawler.StatusFailure {
 			colorCode = ColorRed
-		} else if job.Result != "SUCCESS" {
+		} else if job.Result != crawler.StatusSuccess {
 			colorCode = ColorYellow
 		}
 
