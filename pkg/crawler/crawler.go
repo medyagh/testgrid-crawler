@@ -40,14 +40,50 @@ func New(config Config) *Crawler {
 
 // Run scrapes the Prow job history based on the crawler's configuration
 func (c *Crawler) Run() ([]ProwJob, error) {
-	baseURL := fmt.Sprintf("https://prow.k8s.io/job-history/gs/kubernetes-ci-logs/logs/%s", c.config.JobName)
+	// Known buckets for Prow jobs
+	buckets := []string{
+		"gs/kubernetes-ci-logs/logs",
+		"pr-logs/directory",
+		"gs/kubernetes-jenkins/pr-logs/directory",
+		"gs/kubernetes-ci-logs/pr-logs/directory", // Discovery from browser: presubmits here too!
+	}
+
+	var baseURL string
+	var found bool
+
+	// Probe buckets
+	for _, bucket := range buckets {
+		url := fmt.Sprintf("https://prow.k8s.io/job-history/%s/%s", bucket, c.config.JobName)
+		resp, err := http.Head(url)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			baseURL = url
+			found = true
+			break
+		}
+		// Optional: fmt.Printf("DEBUG: Probing %s failed: %v (Status: %d)\n", url, err, 0)
+		// We could add verbose mode, but for now let's just assume silent failure is fine for fallback.
+		// However, since we are debugging a specific issue, I will print it if it's not 404.
+		if err == nil && resp.StatusCode != http.StatusNotFound {
+			// fmt.Printf("DEBUG: Probe %s returned status %d\n", url, resp.StatusCode)
+		}
+	}
+
+	if !found {
+		// Fallback to primary if probing failed (might be just an error fetching HEAD)
+		baseURL = fmt.Sprintf("https://prow.k8s.io/job-history/gs/kubernetes-ci-logs/logs/%s", c.config.JobName)
+	}
+
 	nextURL := baseURL
 	var allJobs []ProwJob
 
 	for i := 0; i < c.config.MaxPages; i++ {
 		jobs, nextLink, err := fetchPage(nextURL)
 		if err != nil {
-			return nil, err
+			// If first page fails and we guessed the bucket, it might be truly 404
+			if i == 0 {
+				return nil, fmt.Errorf("failed to fetch job history from %s: %w", nextURL, err)
+			}
+			return allJobs, nil // Return what we have if a page fails
 		}
 
 		allJobs = append(allJobs, jobs...)
