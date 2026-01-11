@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"test-grid-crawler/pkg/crawler"
 	"time"
+
+	"github.com/medyagh/testgrid-crawler/pkg/crawler"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/pflag"
