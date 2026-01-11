@@ -1,6 +1,6 @@
-module test-grid-crawler
+module github.com/medyagh/testgrid-crawler
 
-go 1.25.5
+go 1.24
 
 require (
 	github.com/olekukonko/tablewriter v0.0.5
